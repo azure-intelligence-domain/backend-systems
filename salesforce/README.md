@@ -28,3 +28,46 @@ platform's contract; nobody else reads it (ADR 0007).
 
 One document `{ "id": "OrderNumber", "last": 4710 }`, incremented with optimistic concurrency
 (ETag). The first order after a fresh build is **4711**.
+
+## Diagram
+
+```mermaid
+erDiagram
+    Order {
+        string id PK "801Ad0000004711AAA"
+        string OrderNumber "4711"
+        string AccountId
+        string Status
+        string Order_Status__c
+        string Payment_Status__c
+        string Channel__c
+        list OrderItems
+        string CurrencyIsoCode
+        number TotalAmount
+        string ShippingStreet
+        string ShippingPostalCode
+        string ShippingCity
+        string ShippingCountryCode
+        string Requested_Delivery_Date__c
+        string Hold_Reason__c
+        string Cancellation_Reason__c
+        string Idempotency_Key__c
+        datetime CreatedDate
+        datetime LastModifiedDate
+    }
+    OrderItem {
+        integer OrderItemNumber
+        string Product2Id
+        integer Quantity
+        number UnitPrice
+    }
+    AutoNumber {
+        string id PK "OrderNumber"
+        integer last "4710 before the first order"
+    }
+    Order ||--|{ OrderItem : "OrderItems (embedded)"
+    AutoNumber ||--o{ Order : "numbers"
+```
+
+The domain view (Account, Opportunity, Product, and how the platform's contract maps onto this
+record) is in [system-api-salesforce](https://github.com/azure-intelligence-domain/system-api-salesforce#data-model-sales-domain).
