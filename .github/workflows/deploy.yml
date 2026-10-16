@@ -1,0 +1,60 @@
+name: deploy
+
+# Pull requests: compile. main: what-if and deploy (OIDC as id-intplat-backend-systems).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Compile Bicep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          az bicep install --only-show-errors
+          diagnostics=$("$HOME/.azure/bin/bicep" build infra/main.bicep --stdout 2>&1 >/dev/null || true)
+          if echo "$diagnostics" | grep -qE ': (Warning|Error) '; then echo "$diagnostics"; exit 1; fi
+          echo "✅ infra/main.bicep"
+
+  deploy:
+    name: Deploy
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: azure
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Acquire Event Grid token (for the deployment event)
+        run: |
+          token=$(az account get-access-token --resource https://eventgrid.azure.net --query accessToken -o tsv)
+          echo "::add-mask::$token"
+          echo "EVENTGRID_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: What-if
+        run: az deployment group what-if -g rg-intplat-backend-systems -n backend-systems -f infra/main.bicep
+      - name: Deploy
+        run: |
+          az deployment group create -g rg-intplat-backend-systems -n backend-systems -f infra/main.bicep \
+            --query properties.outputs -o json
+      - name: Deployment event
+        if: always()
+        uses: azure-intelligence-domain/integration-platform/.github/actions/deployment-event@v1.1.0
+        with:
+          token: ${{ env.EVENTGRID_TOKEN }}
+          component: backend-systems
+          version: ${{ github.sha }}
+          status: ${{ job.status }}
