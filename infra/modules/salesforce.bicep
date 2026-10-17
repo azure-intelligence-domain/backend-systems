@@ -64,6 +64,21 @@ resource counters 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers
   }
 }
 
+// Reference data: customers (Account) and what they can buy (Product2 with its standard price).
+// The System API writes its sample data on first read (system-api-salesforce/sample_data.py).
+resource referenceData 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-11-15' = [
+  for name in ['Account', 'Product2']: {
+    parent: database
+    name: name
+    properties: {
+      resource: {
+        id: name
+        partitionKey: { paths: ['/id'], kind: 'Hash' }
+      }
+    }
+  }
+]
+
 resource systemApiAccess 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
   parent: account
   name: guid(account.id, systemApiPrincipalId, dataContributor)
